@@ -22,7 +22,7 @@ class TrafficCA:
     
     def __init__(self, length=1000, lanes=3, p_av=0.5, density=0.15, 
                  time_steps=1000, seed=42):
-        """
+        """3  
         初始化交通CA模型
         
         参数:

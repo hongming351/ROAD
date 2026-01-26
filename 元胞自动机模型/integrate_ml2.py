@@ -5,6 +5,9 @@ from bayesian_optimization import BayesianParameterOptimizer
 from CA import TrafficCA, TrafficVisualizer
 from tqdm import tqdm
 import warnings
+import json
+import os
+
 warnings.filterwarnings('ignore')
 
 # 设置中文显示
@@ -39,32 +42,44 @@ class EnhancedTrafficCA(TrafficCA):
         """
         try:
             # 尝试从文件加载优化参数
-            import json
-            with open('optimized_parameters.json', 'r') as f:
-                optimized_params = json.load(f)['best_params']
+            if os.path.exists('optimized_parameters.json'):
+                with open('optimized_parameters.json', 'r') as f:
+                    optimized_data = json.load(f)
+                    
+                if 'best_params' in optimized_data:
+                    optimized_params = optimized_data['best_params']
+                else:
+                    print("优化参数格式不正确，使用默认参数")
+                    self.optimized_params = None
+                    return
+            else:
+                print("未找到优化参数文件，使用默认参数")
+                self.optimized_params = None
+                return
             
             print("应用优化参数...")
             
             # 更新人类车辆参数
-            self.params['human']['reaction_time'] = optimized_params['human_reaction_time']
-            self.params['human']['safe_gap'] = optimized_params['human_safe_gap']
-            self.params['human']['random_slow_prob'] = optimized_params['human_random_slow_prob']
-            self.params['human']['acceleration'] = optimized_params['human_acceleration']
-            self.params['human']['deceleration'] = optimized_params['human_deceleration']
+            self.params['human']['reaction_time'] = optimized_params.get('human_reaction_time', self.params['human']['reaction_time'])
+            self.params['human']['safe_gap'] = optimized_params.get('human_safe_gap', self.params['human']['safe_gap'])
+            self.params['human']['random_slow_prob'] = optimized_params.get('human_random_slow_prob', self.params['human']['random_slow_prob'])
+            self.params['human']['acceleration'] = optimized_params.get('human_acceleration', self.params['human']['acceleration'])
+            self.params['human']['deceleration'] = optimized_params.get('human_deceleration', self.params['human']['deceleration'])
             
             # 更新自动驾驶车辆参数
-            self.params['av']['reaction_time'] = optimized_params['av_reaction_time']
-            self.params['av']['safe_gap'] = optimized_params['av_safe_gap']
-            self.params['av']['acceleration'] = optimized_params['av_acceleration']
-            self.params['av']['deceleration'] = optimized_params['av_deceleration']
+            self.params['av']['reaction_time'] = optimized_params.get('av_reaction_time', self.params['av']['reaction_time'])
+            self.params['av']['safe_gap'] = optimized_params.get('av_safe_gap', self.params['av']['safe_gap'])
+            self.params['av']['acceleration'] = optimized_params.get('av_acceleration', self.params['av']['acceleration'])
+            self.params['av']['deceleration'] = optimized_params.get('av_deceleration', self.params['av']['deceleration'])
             
             # 存储交互参数
             self.optimized_params = optimized_params
             
             print("优化参数应用成功!")
             
-        except FileNotFoundError:
-            print("未找到优化参数文件，使用默认参数")
+        except Exception as e:
+            print(f"加载优化参数时出错: {e}")
+            print("使用默认参数")
             self.optimized_params = None
     
     def update_speed_human_optimized(self, current_speed, gap, front_speed, front_type):
@@ -83,7 +98,7 @@ class EnhancedTrafficCA(TrafficCA):
         if gap < safe_distance:
             # 需要减速
             if front_type == 2:  # 前车是AV
-                # 对AV前车更谨慎（使用优化参数）
+                # 对AV前车更谨慎
                 if self.optimized_params and 'human_follow_av_caution' in self.optimized_params:
                     caution_factor = self.optimized_params['human_follow_av_caution']
                 else:
@@ -147,8 +162,8 @@ class EnhancedTrafficCA(TrafficCA):
         original_av_update = self.update_speed_av
         
         # 替换为优化方法
-        self.update_speed_human = self.update_speed_human_optimized
-        self.update_speed_av = self.update_speed_av_optimized
+        self.update_speed_human = lambda *args: self.update_speed_human_optimized(*args)
+        self.update_speed_av = lambda *args: self.update_speed_av_optimized(*args)
         
         # 运行仿真
         self.run(warmup=warmup, verbose=verbose)
@@ -156,6 +171,63 @@ class EnhancedTrafficCA(TrafficCA):
         # 恢复原方法
         self.update_speed_human = original_human_update
         self.update_speed_av = original_av_update
+
+
+def run_bayesian_optimization():
+    """
+    运行贝叶斯优化参数校准
+    """
+    print("\n初始化贝叶斯优化器...")
+    
+    # 创建优化器
+    optimizer = BayesianParameterOptimizer(
+        param_ranges={
+            'human_reaction_time': (0.5, 2.0),  # 人类反应时间
+            'human_safe_gap': (0.5, 3.0),      # 人类安全距离系数
+            'human_random_slow_prob': (0.0, 0.2),  # 人类随机减速概率
+            'human_acceleration': (0.5, 2.0),  # 人类加速度
+            'human_deceleration': (1.0, 3.0),  # 人类减速度
+            
+            'av_reaction_time': (0.1, 1.0),    # AV反应时间
+            'av_safe_gap': (0.3, 2.0),         # AV安全距离系数
+            'av_acceleration': (1.0, 3.0),     # AV加速度
+            'av_deceleration': (1.0, 3.0),     # AV减速度
+            
+            'human_follow_av_caution': (1.0, 2.0),  # 人类跟随AV的谨慎系数
+            'av_follow_av_gap_factor': (0.5, 1.0)   # AV跟随AV的距离系数
+        }
+    )
+    
+    print("开始贝叶斯优化...")
+    best_params, best_score = optimizer.optimize(
+        n_iter=50,
+        init_points=10,
+        acquisition_function='ei'
+    )
+    
+    print(f"\n优化完成!")
+    print(f"最佳得分: {best_score:.4f}")
+    print(f"最佳参数:")
+    for param, value in best_params.items():
+        print(f"  {param}: {value:.4f}")
+    
+    # 保存优化参数
+    optimizer.save_results('optimized_parameters.json')
+    
+    # 创建使用优化参数的模型进行验证
+    print("\n使用优化参数创建模型验证...")
+    optimized_model = EnhancedTrafficCA(
+        length=1000,
+        lanes=3,
+        p_av=0.5,
+        density=0.2,
+        time_steps=200,
+        use_optimized_params=True
+    )
+    
+    optimized_model.run_with_optimized_rules(warmup=50, verbose=False)
+    
+    return optimizer, optimized_model
 
 
 def integrated_main():
@@ -180,8 +252,7 @@ def integrated_main():
         print("运行贝叶斯优化参数校准")
         print("=" * 60)
         
-        from bayesian_optimization import main as run_optimization
-        optimizer, optimized_model = run_optimization()
+        optimizer, optimized_model = run_bayesian_optimization()
         
         # 使用优化后的模型进行分析
         p_values = [0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
@@ -207,11 +278,18 @@ def integrated_main():
             all_results, p_values, save_path='optimized_comparison.png'
         )
         
+        plt.show()
+        
     elif choice == '2':
         # 使用已有优化参数
         print("\n" + "=" * 60)
         print("使用已有优化参数进行仿真")
         print("=" * 60)
+        
+        # 检查是否有优化参数文件
+        if not os.path.exists('optimized_parameters.json'):
+            print("未找到优化参数文件，请先运行选项1进行参数优化")
+            return
         
         # 创建使用优化参数的模型
         model = EnhancedTrafficCA(
@@ -229,6 +307,7 @@ def integrated_main():
         # 可视化
         visualizer = TrafficVisualizer(model)
         fig = visualizer.plot_road_snapshot(save_path='optimized_road_snapshot.png')
+        plt.show()
         
         # 运行多p值分析
         print("\n运行多p值分析...")
@@ -254,6 +333,7 @@ def integrated_main():
         )
         
         print(f"\n优化模型临界点: p ≈ {tipping_point:.2f}")
+        plt.show()
         
     elif choice == '3':
         # 对比优化前后效果
@@ -360,7 +440,7 @@ def integrated_main():
         for i in range(len(p_values)):
             speed_improvement = (optimized_speeds[i] - default_speeds[i]) / default_speeds[i] * 100
             flow_improvement = (optimized_flows[i] - default_flows[i]) / default_flows[i] * 100
-            congestion_improvement = (default_congestion[i] - optimized_congestion[i]) / default_congestion[i] * 100
+            congestion_improvement = (default_congestion[i] - optimized_congestion[i]) / default_congestion[i] * 100 if default_congestion[i] > 0 else 0
             
             improvements.append({
                 'p': p_values[i],

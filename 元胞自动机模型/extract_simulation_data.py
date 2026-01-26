@@ -6,11 +6,60 @@ import matplotlib.pyplot as plt
 
 # 从你的代码中导入必要模块
 from CA import TrafficCA
-from bayesian_optimization import BayesianParameterOptimizer
+# 注意：我们不再直接调用BayesianParameterOptimizer
 
 # 设置中文显示
 plt.rcParams['font.sans-serif'] = ['SimHei']
 plt.rcParams['axes.unicode_minus'] = False
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """自定义JSON编码器，处理numpy数据类型"""
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int32, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        return super(NumpyEncoder, self).default(obj)
+
+
+def create_ca_model_with_params(p, density=0.2, use_optimized_params=False, seed=42):
+    """
+    创建CA模型，可以选择是否使用优化参数
+    注意：这里简化处理，直接使用默认参数，真正的优化参数需要从文件加载
+    """
+    model = TrafficCA(
+        length=1000,
+        lanes=3,
+        p_av=p,
+        density=density,
+        time_steps=200,
+        seed=seed
+    )
+    
+    # 如果使用优化参数，尝试加载并应用
+    if use_optimized_params:
+        try:
+            from bayesian_optimization import EnhancedTrafficCA
+            # 尝试加载优化参数
+            model = EnhancedTrafficCA(
+                length=1000,
+                lanes=3,
+                p_av=p,
+                density=density,
+                time_steps=200,
+                seed=seed,
+                use_optimized_params=True
+            )
+        except Exception as e:
+            print(f"  注意: 无法加载优化参数: {e}")
+            print(f"  使用默认参数继续...")
+    
+    return model
 
 
 def run_multi_p_simulation(p_values=None, use_optimized_params=True, 
@@ -37,39 +86,15 @@ def run_multi_p_simulation(p_values=None, use_optimized_params=True,
         print(f"开始多p值仿真，共{len(p_values)}个p值")
         print(f"使用{'优化' if use_optimized_params else '默认'}参数")
     
-    for i, p in enumerate(p_values):
-        if verbose:
-            print(f"\n进度: {i+1}/{len(p_values)} - p = {p:.2f}")
-        
+    for i, p in enumerate(tqdm(p_values, desc="仿真进度")):
         try:
             # 创建模型实例
-            if use_optimized_params:
-                # 尝试使用优化参数
-                try:
-                    optimizer = BayesianParameterOptimizer()
-                    model = optimizer.get_optimized_ca_model()
-                    model.p_av = p
-                    model.road = np.zeros_like(model.road)  # 重置道路
-                    model.generate_initial_vehicles()  # 重新生成车辆
-                except Exception as e:
-                    print(f"加载优化参数失败: {e}，使用默认参数")
-                    model = TrafficCA(
-                        length=1000,
-                        lanes=3,
-                        p_av=p,
-                        density=0.2,
-                        time_steps=200,
-                        seed=42+i
-                    )
-            else:
-                model = TrafficCA(
-                    length=1000,
-                    lanes=3,
-                    p_av=p,
-                    density=0.2,
-                    time_steps=200,
-                    seed=42+i
-                )
+            model = create_ca_model_with_params(
+                p=p,
+                density=0.2,
+                use_optimized_params=use_optimized_params,
+                seed=42 + i
+            )
             
             # 运行仿真
             model.run(warmup=50, verbose=False)
@@ -77,32 +102,41 @@ def run_multi_p_simulation(p_values=None, use_optimized_params=True,
             # 获取统计结果
             stats = model.get_summary_stats()
             
+            # 确保所有数值都是Python原生类型
+            for key, value in stats.items():
+                if isinstance(value, (np.integer, np.int32, np.int64)):
+                    stats[key] = int(value)
+                elif isinstance(value, (np.floating, np.float32, np.float64)):
+                    stats[key] = float(value)
+                elif isinstance(value, np.bool_):
+                    stats[key] = bool(value)
+            
             # 添加额外信息
-            stats['p_value'] = p
+            stats['p_value'] = float(p)
             stats['simulation_id'] = i
             stats['use_optimized_params'] = use_optimized_params
             
             simulation_results.append(stats)
             
             if verbose:
-                print(f"  结果: 速度={stats['mean_speed']:.1f}mph, "
+                print(f"p={p:.2f}: 速度={stats['mean_speed']:.1f}mph, "
                       f"流量={stats['mean_flow']:.0f}辆/小时")
         
         except Exception as e:
-            print(f"p={p} 时仿真失败: {e}")
+            print(f"\np={p} 时仿真失败: {e}")
             # 添加一个默认结果
             simulation_results.append({
-                'p_value': p,
-                'mean_speed': 30,
-                'mean_flow': 1000,
+                'p_value': float(p),
+                'mean_speed': 30.0,
+                'mean_flow': 1000.0,
                 'congestion_index': 0.5,
-                'throughput': 500,
-                'std_speed': 5,
-                'std_flow': 100,
-                'mean_density': 20,
-                'max_flow': 1200,
-                'min_speed': 25,
-                'av_actual_percentage': p,
+                'throughput': 500.0,
+                'std_speed': 5.0,
+                'std_flow': 100.0,
+                'mean_density': 20.0,
+                'max_flow': 1200.0,
+                'min_speed': 25.0,
+                'av_actual_percentage': float(p),
                 'simulation_id': i,
                 'use_optimized_params': use_optimized_params
             })
@@ -112,10 +146,10 @@ def run_multi_p_simulation(p_values=None, use_optimized_params=True,
         filename = f'simulation_results_{"optimized" if use_optimized_params else "default"}.json'
         with open(filename, 'w') as f:
             json.dump({
-                'p_values': p_values,
+                'p_values': [float(p) for p in p_values],  # 转换为Python float
                 'results': simulation_results,
                 'timestamp': pd.Timestamp.now().isoformat()
-            }, f, indent=4, default=str)
+            }, f, indent=4, cls=NumpyEncoder)
         
         # 保存到CSV文件（更容易处理）
         df = pd.DataFrame(simulation_results)
@@ -309,24 +343,40 @@ def prepare_data_for_pelt(p_values, results):
     适合PELT检测的数据结构
     """
     
+    # 确保所有数据都是Python原生类型
     pelt_data = {
-        'p': p_values,
-        'speed': [r['mean_speed'] for r in results],
-        'flow': [r['mean_flow'] for r in results],
-        'congestion': [r['congestion_index'] for r in results],
+        'p': [float(p) for p in p_values],
+        'speed': [float(r['mean_speed']) for r in results],
+        'flow': [float(r['mean_flow']) for r in results],
+        'congestion': [float(r['congestion_index']) for r in results],
         'travel_time': []
     }
     
     # 计算旅行时间（假设路段长度10km）
     for r in results:
-        speed = r['mean_speed']
+        speed = float(r['mean_speed'])
         if speed > 0:
             travel_time = 10 / speed * 60  # 10km，转换为分钟
         else:
-            travel_time = 999  # 极大值表示完全拥堵
-        pelt_data['travel_time'].append(travel_time)
+            travel_time = 999.0  # 极大值表示完全拥堵
+        pelt_data['travel_time'].append(float(travel_time))
     
     return pelt_data
+
+
+def check_optimized_params_available():
+    """检查是否有优化参数可用"""
+    try:
+        import os
+        if os.path.exists('optimized_parameters.json'):
+            print("发现优化参数文件: optimized_parameters.json")
+            return True
+        else:
+            print("未找到优化参数文件")
+            print("建议：先运行主程序的选项1进行贝叶斯优化")
+            return False
+    except:
+        return False
 
 
 def main():
@@ -337,6 +387,9 @@ def main():
     print("CA仿真数据提取与准备")
     print("=" * 60)
     
+    # 检查是否有优化参数
+    has_optimized_params = check_optimized_params_available()
+    
     print("\n选项:")
     print("1. 运行新的多p值仿真（使用优化参数）")
     print("2. 运行新的多p值仿真（使用默认参数）")
@@ -346,6 +399,12 @@ def main():
     choice = input("\n请选择 (1-4): ").strip()
     
     if choice == '1':
+        if not has_optimized_params:
+            confirm = input("没有找到优化参数文件，是否继续使用默认参数运行？(y/n): ").strip().lower()
+            if confirm != 'y':
+                print("退出程序")
+                return
+        
         # 运行优化参数仿真
         p_values, results = run_multi_p_simulation(
             p_values=np.linspace(0, 1, 21).tolist(),  # 21个点，更密集
@@ -393,7 +452,7 @@ def main():
         # 保存为PELT专用格式
         pelt_filename = 'pelt_ready_data.json'
         with open(pelt_filename, 'w') as f:
-            json.dump(pelt_data, f, indent=4)
+            json.dump(pelt_data, f, indent=4, cls=NumpyEncoder)
         
         print(f"\nPELT数据已保存到: {pelt_filename}")
         print(f"数据结构:")
@@ -420,11 +479,14 @@ def main():
         pelt_data = prepare_data_for_pelt(p_values, results)
         
         # 保存PELT数据
-        with open('pelt_ready_data.json', 'w') as f:
-            json.dump(pelt_data, f, indent=4)
+        with open('pelt_ready_data.json', 'w', encoding='utf-8') as f:
+            json.dump(pelt_data, f, indent=4, cls=NumpyEncoder)
         
         print(f"\nPELT变点检测数据已保存到: pelt_ready_data.json")
         print("您现在可以运行PELT变点检测模块了!")
+        
+        # 显示图表
+        plt.show()
     
     print("\n" + "=" * 60)
     print("数据准备完成!")

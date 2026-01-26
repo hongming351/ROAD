@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from bayes_opt import BayesianOptimization
-from bayes_opt import UtilityFunction
+from bayes_opt.acquisition import ExpectedImprovement, ProbabilityOfImprovement, UpperConfidenceBound
 import matplotlib.pyplot as plt
 from scipy import stats
 import warnings
@@ -17,7 +17,7 @@ class BayesianParameterOptimizer:
     """
     
     def __init__(self, observed_data_path='2017_MCM_Problem_C_Data.csv', 
-                 bottleneck_data_path='critical_bottlenecks.csv'):
+                 bottleneck_data_path='LWR\critical_bottlenecks.csv'):
         """
         初始化贝叶斯优化器
         
@@ -322,21 +322,22 @@ class BayesianParameterOptimizer:
         print(f"初始点: {init_points}, 迭代次数: {n_iter}")
         print("=" * 60)
         
+        # 设置采集函数
+        if acq == 'ucb':
+            acquisition_function = UpperConfidenceBound(kappa=kappa)
+        elif acq == 'ei':
+            acquisition_function = ExpectedImprovement(xi=xi)
+        else:  # poi
+            acquisition_function = ProbabilityOfImprovement(xi=xi)
+
         # 创建优化器
         optimizer = BayesianOptimization(
             f=self.evaluate_parameters,
             pbounds=self.param_bounds,
             random_state=42,
-            verbose=1
+            verbose=1,
+            acquisition_function=acquisition_function
         )
-        
-        # 设置采集函数
-        if acq == 'ucb':
-            utility = UtilityFunction(kind="ucb", kappa=kappa, xi=xi)
-        elif acq == 'ei':
-            utility = UtilityFunction(kind="ei", kappa=kappa, xi=xi)
-        else:  # poi
-            utility = UtilityFunction(kind="poi", kappa=kappa, xi=xi)
         
         # 初始随机探索
         print("\n阶段1: 初始随机探索")
@@ -346,19 +347,17 @@ class BayesianParameterOptimizer:
         print("\n阶段2: 贝叶斯优化迭代")
         for i in tqdm(range(n_iter), desc="贝叶斯优化进度"):
             try:
-                next_point = optimizer.suggest(utility)
-                target = optimizer.probe(params=next_point, lazy=True)
                 optimizer.maximize(init_points=0, n_iter=1)
-                
+
                 # 更新最佳参数
                 if optimizer.max['target'] > self.best_score:
                     self.best_score = optimizer.max['target']
                     self.best_params = optimizer.max['params']
-                    
+
                     # 打印当前最佳结果
                     if i % 5 == 0:
                         print(f"\n迭代 {i+1}: 最佳得分 = {self.best_score:.4f}")
-                        
+
             except Exception as e:
                 print(f"\n迭代 {i+1} 时出错: {e}")
                 continue
@@ -557,14 +556,21 @@ class BayesianParameterOptimizer:
         
         # 雷达图
         angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-        simulated_norm += simulated_norm[:1]  # 闭合图形
-        target_norm += target_norm[:1]
-        angles += angles[:1]
-        
+        angles += angles[:1]  # 闭合图形
+
+        # 确保数据也闭合（转换为列表以确保连接操作正常工作）
+        simulated_norm_list = simulated_norm.tolist() if hasattr(simulated_norm, 'tolist') else list(simulated_norm)
+        target_norm_list = target_norm.tolist() if hasattr(target_norm, 'tolist') else list(target_norm)
+
+        simulated_norm_closed = simulated_norm_list + simulated_norm_list[:1]
+        target_norm_closed = target_norm_list + target_norm_list[:1]
+
+        # Remove debug print
+
         ax_radar = fig.add_axes([0.75, 0.1, 0.25, 0.25], polar=True)
-        ax_radar.plot(angles, simulated_norm, 'o-', linewidth=2, label='模拟结果')
-        ax_radar.plot(angles, target_norm, 'o-', linewidth=2, label='目标值')
-        ax_radar.fill(angles, simulated_norm, alpha=0.25)
+        ax_radar.plot(angles, simulated_norm_closed, 'o-', linewidth=2, label='模拟结果')
+        ax_radar.plot(angles, target_norm_closed, 'o-', linewidth=2, label='目标值')
+        ax_radar.fill(angles, simulated_norm_closed, alpha=0.25)
         ax_radar.set_xticks(angles[:-1])
         ax_radar.set_xticklabels(categories, fontsize=10)
         ax_radar.set_title('性能对比雷达图', fontsize=12, y=1.1)
