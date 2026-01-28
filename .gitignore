@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.log
+
+# 大型数据文件（如果有的话）
+*.csv.bak
+*.json.bak
+
+# 模型文件（可选，如果不想版本控制）
+*.pkl
+*.joblib
+
+# 结果文件（可选，如果不想版本控制）
+results/
