@@ -1,0 +1,186 @@
+{
+    "av_impact": [
+        {
+            "p": 0.0,
+            "total_time": 36865.233336249854,
+            "avg_speed": 86.85213130729521,
+            "total_flow": 2459713.6454595383,
+            "avg_vc_ratio": 0.767680032280356,
+            "max_vc_ratio": 1.4264553997060612,
+            "congestion_percent": 47.73218142548596,
+            "improvement_pct": 0.0
+        },
+        {
+            "p": 0.2,
+            "total_time": 34835.55889344006,
+            "avg_speed": 91.91252237945261,
+            "total_flow": 2459713.6454595383,
+            "avg_vc_ratio": 0.767680032280356,
+            "max_vc_ratio": 1.4264553997060612,
+            "congestion_percent": 47.73218142548596,
+            "improvement_pct": 5.505660100661839
+        },
+        {
+            "p": 0.4,
+            "total_time": 34178.31670171656,
+            "avg_speed": 93.67998179480973,
+            "total_flow": 2459713.6454595383,
+            "avg_vc_ratio": 0.767680032280356,
+            "max_vc_ratio": 1.4264553997060612,
+            "congestion_percent": 47.73218142548596,
+            "improvement_pct": 7.288484003412581
+        },
+        {
+            "p": 0.6,
+            "total_time": 33843.94656337966,
+            "avg_speed": 94.60551772228996,
+            "total_flow": 2459713.6454595383,
+            "avg_vc_ratio": 0.767680032280356,
+            "max_vc_ratio": 1.4264553997060612,
+            "congestion_percent": 47.73218142548596,
+            "improvement_pct": 8.195490708855335
+        },
+        {
+            "p": 0.8,
+            "total_time": 33648.63136599743,
+            "avg_speed": 95.15466027630329,
+            "total_flow": 2459713.6454595383,
+            "avg_vc_ratio": 0.767680032280356,
+            "max_vc_ratio": 1.4264553997060612,
+            "congestion_percent": 47.73218142548596,
+            "improvement_pct": 8.72529936515962
+        },
+        {
+            "p": 1.0,
+            "total_time": 33524.749579209325,
+            "avg_speed": 95.50627899036385,
+            "total_flow": 2459713.6454595383,
+            "avg_vc_ratio": 0.767680032280356,
+            "max_vc_ratio": 1.4264553997060612,
+            "congestion_percent": 47.73218142548596,
+            "improvement_pct": 9.061338976405736
+        }
+    ],
+    "lane_analysis": [
+        {
+            "n_lanes": 1,
+            "time_saving_pct": -0.014717063680514843,
+            "speed_improvement_pct": -0.014714898079596321,
+            "congestion_reduction_pct": 0.0,
+            "construction_cost_million": 1.1909116000000146,
+            "annual_benefit_million": -0.025009284628758906,
+            "npv_net_million": -1.3840266666718273,
+            "bc_ratio": -0.16215734792726028,
+            "av_total_time": 33991.78776975808,
+            "av_avg_speed": 94.19404792950189,
+            "av_avg_vc": 0.767680032280356
+        },
+        {
+            "n_lanes": 2,
+            "time_saving_pct": -0.02409436067086672,
+            "speed_improvement_pct": -0.02408855668713449,
+            "congestion_reduction_pct": 0.0,
+            "construction_cost_million": 1.9633948000000152,
+            "annual_benefit_million": -0.04094449389136571,
+            "npv_net_million": -2.2795573286387683,
+            "bc_ratio": -0.16102850462818305,
+            "av_total_time": 33994.9748116106,
+            "av_avg_speed": 94.18521720158775,
+            "av_avg_vc": 0.767680032280356
+        },
+        {
+            "n_lanes": 3,
+            "time_saving_pct": -0.05025330371620307,
+            "speed_improvement_pct": -0.050228062455414446,
+            "congestion_reduction_pct": 0.0,
+            "construction_cost_million": 2.88071860000005,
+            "annual_benefit_million": -0.08539741374075675,
+            "npv_net_million": -3.5401347925440985,
+            "bc_ratio": -0.2289068403085388,
+            "av_total_time": 34003.86539558048,
+            "av_avg_speed": 94.16059171938123,
+            "av_avg_vc": 0.767680032280356
+        }
+    ],
+    "critical_edges": [
+        "('5_164.22', '5_163.48')",
+        "('405_7.20', '405_6.72')",
+        "('5_162.79', '5_163.36')",
+        "('405_5.19', '405_4.79')",
+        "('405_15.76', '405_17.05')",
+        "('405_7.20', '405_7.69')",
+        "('5_178.61', '5_179.17')",
+        "('5_155.18', '5_155.59')",
+        "('405_6.72', '405_6.34')",
+        "('5_134.97', '5_135.32')"
+    ],
+    "od_elasticities": {
+        "('5_100.93', '5_218.33')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.3
+        },
+        "('5_100.93', '5_163.36')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.25
+        },
+        "('90_1.94', '90_25.37')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.3
+        },
+        "('90_1.94', '90_11.64')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.25
+        },
+        "('405_0.00', '405_30.32')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.3
+        },
+        "('405_0.00', '405_12.44')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.25
+        },
+        "('5_165.29', '90_2.79')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.2
+        },
+        "('5_182.59', '405_30.32')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.2
+        },
+        "('405_11.69', '90_12.34')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.2
+        },
+        "('90_2.79', '5_165.29')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.2
+        },
+        "('405_30.32', '5_182.59')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.2
+        },
+        "('90_12.34', '405_11.69')": {
+            "travel_time_elasticity": -0.25,
+            "speed_elasticity": 0.2,
+            "estimated_elasticity": -0.2
+        }
+    },
+    "literature_elasticities": {
+        "travel_time": -0.25,
+        "cost": -0.15,
+        "speed": 0.2,
+        "income": 0.1,
+        "av_penetration": 0.05
+    }
+}

@@ -1,0 +1,239 @@
+{
+    "av_impact_enhanced": [
+        {
+            "p": 0.0,
+            "total_time": 23984.546538518265,
+            "avg_speed": 94.30219956882168,
+            "total_flow": 1723117.2000000002,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5,
+            "method": "elastic_net",
+            "improvement_pct": 0.0
+        },
+        {
+            "p": 0.2,
+            "total_time": 23676.25565678561,
+            "avg_speed": 95.53011789661134,
+            "total_flow": 1723117.2000000002,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5,
+            "method": "elastic_net",
+            "improvement_pct": 1.285372984798983
+        },
+        {
+            "p": 0.4,
+            "total_time": 23576.425964631657,
+            "avg_speed": 95.9346212032345,
+            "total_flow": 1723117.2000000002,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5,
+            "method": "elastic_net",
+            "improvement_pct": 1.70159804035145
+        },
+        {
+            "p": 0.6,
+            "total_time": 23525.637886209486,
+            "avg_speed": 96.1417286614313,
+            "total_flow": 1723117.2000000002,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5,
+            "method": "elastic_net",
+            "improvement_pct": 1.9133513805307483
+        },
+        {
+            "p": 0.8,
+            "total_time": 23495.971111505773,
+            "avg_speed": 96.26312032429504,
+            "total_flow": 1723117.2000000002,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5,
+            "method": "elastic_net",
+            "improvement_pct": 2.0370425858494308
+        },
+        {
+            "p": 1.0,
+            "total_time": 23477.1544853149,
+            "avg_speed": 96.34027393131511,
+            "total_flow": 1723117.2000000002,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5,
+            "method": "elastic_net",
+            "improvement_pct": 2.1154957104922287
+        }
+    ],
+    "lane_analysis": [
+        {
+            "n_lanes": 1,
+            "time_saving_pct": -0.002117813450301316,
+            "speed_improvement_pct": -0.0021177685999050687,
+            "congestion_reduction_pct": 0.0,
+            "construction_cost_million": 0.692016200000011,
+            "annual_benefit_million": -0.0024934430343091663,
+            "npv_net_million": -0.7112699061719687,
+            "bc_ratio": -0.027822623476094,
+            "av_total_time": 23547.83269911102,
+            "av_avg_speed": 96.05111107861865,
+            "av_avg_vc": 0.5539178977272726
+        },
+        {
+            "n_lanes": 2,
+            "time_saving_pct": -0.0038908665714996213,
+            "speed_improvement_pct": -0.0038907151889550668,
+            "congestion_reduction_pct": 0.0,
+            "construction_cost_million": 1.2713785999999871,
+            "annual_benefit_million": -0.004580976737470337,
+            "npv_net_million": -1.3067516880834948,
+            "bc_ratio": -0.02782262347620777,
+            "av_total_time": 23548.25020585165,
+            "av_avg_speed": 96.04940810765605,
+            "av_avg_vc": 0.5539178977272726
+        },
+        {
+            "n_lanes": 3,
+            "time_saving_pct": -0.005910177070619821,
+            "speed_improvement_pct": -0.005909827789325659,
+            "congestion_reduction_pct": 0.0,
+            "construction_cost_million": 1.9312079999999816,
+            "annual_benefit_million": -0.006958445677155396,
+            "npv_net_million": -1.9849392730381075,
+            "bc_ratio": -0.027822623476148833,
+            "av_total_time": 23548.725699639588,
+            "av_avg_speed": 96.04746868649701,
+            "av_avg_vc": 0.5539178977272726
+        }
+    ],
+    "elasticity_analysis": [
+        {
+            "origin": "5_100.93",
+            "destination": "5_218.33",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.1
+        },
+        {
+            "origin": "5_100.93",
+            "destination": "5_163.36",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.12
+        },
+        {
+            "origin": "90_1.94",
+            "destination": "90_25.37",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.1
+        },
+        {
+            "origin": "90_1.94",
+            "destination": "90_11.64",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.12
+        },
+        {
+            "origin": "405_0.00",
+            "destination": "405_30.32",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.1
+        },
+        {
+            "origin": "405_0.00",
+            "destination": "405_12.44",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.12
+        },
+        {
+            "origin": "5_165.29",
+            "destination": "90_2.79",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.15
+        },
+        {
+            "origin": "5_182.59",
+            "destination": "405_30.32",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.15
+        },
+        {
+            "origin": "405_11.69",
+            "destination": "90_12.34",
+            "time_elasticity": 0.0036471587747931846,
+            "speed_elasticity": 0.00394357807945994,
+            "combined_elasticity": 0.15
+        }
+    ],
+    "method_comparison": [
+        {
+            "method": "fixed_elasticity",
+            "total_time": 23547.334010504157,
+            "total_flow": 1723117.2000000002,
+            "avg_speed": 96.05314526196823,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5
+        },
+        {
+            "method": "elastic_net",
+            "total_time": 23547.334010504157,
+            "total_flow": 1723117.2000000002,
+            "avg_speed": 96.05314526196823,
+            "avg_vc_ratio": 0.5539178977272726,
+            "congestion_percent": 12.5
+        }
+    ],
+    "feature_importance": [
+        {
+            "feature": "distance",
+            "coefficient": 20.210246064864208,
+            "abs_coefficient": 20.210246064864208
+        },
+        {
+            "feature": "travel_time",
+            "coefficient": 11.899003131143266,
+            "abs_coefficient": 11.899003131143266
+        },
+        {
+            "feature": "congestion_level",
+            "coefficient": 3.44111143657675,
+            "abs_coefficient": 3.44111143657675
+        },
+        {
+            "feature": "avg_speed",
+            "coefficient": 1.460521284890097,
+            "abs_coefficient": 1.460521284890097
+        },
+        {
+            "feature": "av_penetration",
+            "coefficient": -0.9244273173613667,
+            "abs_coefficient": 0.9244273173613667
+        },
+        {
+            "feature": "is_weekend",
+            "coefficient": 0.0,
+            "abs_coefficient": 0.0
+        },
+        {
+            "feature": "day_of_week",
+            "coefficient": 0.0,
+            "abs_coefficient": 0.0
+        },
+        {
+            "feature": "time_of_day",
+            "coefficient": -0.0,
+            "abs_coefficient": 0.0
+        },
+        {
+            "feature": "toll_cost",
+            "coefficient": -0.0,
+            "abs_coefficient": 0.0
+        }
+    ],
+    "elastic_net_params": {
+        "best_alpha": 0.8858667904100823,
+        "best_l1_ratio": 0.9
+    }
+}

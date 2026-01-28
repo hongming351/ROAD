@@ -1,610 +1,600 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import json
+import matplotlib.pyplot as plt
 from scipy import signal
-import warnings
-warnings.filterwarnings('ignore')
+import os
 
-# 从之前文件导入FixedChangePointDetector类
-try:
-    from pelt_change_point_fixed import FixedChangePointDetector
-except ImportError:
-    # 如果导入失败，定义简化版
-    print("未找到pelt_change_point_fixed，使用内置简化版检测器")
-    
-    class FixedChangePointDetector:
-        """简化版变点检测器"""
-        def __init__(self, p_values, simulation_results):
-            self.p_values = np.array(p_values)
-            self.simulation_results = simulation_results
-            self.performance_data = self._extract_performance_data()
-            self.change_points = {}
-        
-        def _extract_performance_data(self):
-            """从仿真结果中提取性能数据"""
-            performance_data = {
-                'p': self.p_values,
-                'speed': [],
-                'flow': [],
-                'congestion': [],
-                'travel_time': []
-            }
-            
-            for result in self.simulation_results:
-                # 处理不同格式的结果
-                if isinstance(result, dict):
-                    speed = result.get('mean_speed', 0)
-                    flow = result.get('mean_flow', 0)
-                    congestion = result.get('congestion_index', 0)
-                else:
-                    # 假设是DataFrame行
-                    speed = getattr(result, 'mean_speed', 0)
-                    flow = getattr(result, 'mean_flow', 0)
-                    congestion = getattr(result, 'congestion_index', 0)
-                
-                performance_data['speed'].append(speed)
-                performance_data['flow'].append(flow)
-                performance_data['congestion'].append(congestion)
-                
-                # 计算旅行时间
-                if speed > 0:
-                    travel_time = 10 / speed * 60  # 10km路段
-                else:
-                    travel_time = 999
-                performance_data['travel_time'].append(travel_time)
-            
-            # 转换为numpy数组
-            for key in performance_data:
-                if key != 'p':
-                    performance_data[key] = np.array(performance_data[key])
-            
-            return performance_data
-        
-        def detect_change_points_alternative(self, signal_data):
-            """备选变点检测方法"""
-            # 平滑信号
-            window_size = min(5, len(signal_data) // 10)
-            if window_size % 2 == 0:
-                window_size += 1
-            
-            if len(signal_data) > window_size:
-                smoothed = signal.savgol_filter(signal_data, window_size, 3)
-            else:
-                smoothed = signal_data
-            
-            # 基于梯度的检测
-            gradient = np.gradient(smoothed)
-            abs_gradient = np.abs(gradient)
-            
-            # 自适应阈值
-            if len(gradient) > 10:
-                threshold = np.mean(abs_gradient) + np.std(abs_gradient)
-            else:
-                threshold = np.mean(abs_gradient) * 1.5
-            
-            # 找到梯度显著变化的点
-            candidate_points = []
-            for i in range(1, len(abs_gradient) - 1):
-                if abs_gradient[i] > threshold:
-                    if abs_gradient[i] > abs_gradient[i-1] and abs_gradient[i] > abs_gradient[i+1]:
-                        candidate_points.append(i)
-            
-            # 基于曲率的检测
-            second_gradient = np.gradient(gradient)
-            zero_crossings = []
-            for i in range(1, len(second_gradient)):
-                if second_gradient[i-1] * second_gradient[i] < 0:
-                    zero_crossings.append(i)
-            
-            # 合并候选点
-            all_candidates = np.unique(np.concatenate([
-                candidate_points, 
-                zero_crossings
-            ])).astype(int)
-            
-            # 过滤太接近的点
-            min_gap = max(3, len(signal_data) // 20)
-            filtered_points = []
-            
-            for point in all_candidates:
-                if len(filtered_points) == 0:
-                    filtered_points.append(point)
-                elif point - filtered_points[-1] >= min_gap:
-                    filtered_points.append(point)
-            
-            return filtered_points
-        
-        def detect_all_change_points(self):
-            """检测所有性能指标的变点"""
-            results = {}
-            
-            for metric in ['speed', 'flow', 'congestion', 'travel_time']:
-                signal_data = self.performance_data[metric]
-                change_points = self.detect_change_points_alternative(signal_data)
-                
-                change_p_values = [self.p_values[cp] for cp in change_points]
-                
-                results[metric] = {
-                    'indices': change_points,
-                    'p_values': change_p_values,
-                    'num_points': len(change_points),
-                    'signal': signal_data
-                }
-            
-            # 识别共识临界点
-            results['consensus'] = self._find_consensus_change_points(results)
-            self.change_points = results
-            return results
-        
-        def _find_consensus_change_points(self, results, tolerance=0.05):
-            """寻找多个指标共识的变点"""
-            all_change_points = []
-            for metric, data in results.items():
-                if metric != 'consensus':
-                    all_change_points.extend(data['p_values'])
-            
-            if not all_change_points:
-                return {'p_values': [], 'strength': []}
-            
-            # 聚类相近的变点
-            all_change_points.sort()
-            clusters = []
-            current_cluster = [all_change_points[0]]
-            
-            for point in all_change_points[1:]:
-                if point - current_cluster[-1] <= tolerance:
-                    current_cluster.append(point)
-                else:
-                    clusters.append(current_cluster)
-                    current_cluster = [point]
-            
-            if current_cluster:
-                clusters.append(current_cluster)
-            
-            # 计算每个聚类的中心点和强度
-            consensus_p_values = []
-            consensus_strengths = []
-            
-            for cluster in clusters:
-                center = np.mean(cluster)
-                strength = len(cluster)
-                consensus_p_values.append(center)
-                consensus_strengths.append(strength)
-            
-            # 按强度排序
-            sorted_indices = np.argsort(consensus_strengths)[::-1]
-            return {
-                'p_values': [consensus_p_values[i] for i in sorted_indices],
-                'strength': [consensus_strengths[i] for i in sorted_indices],
-                'top_point': consensus_p_values[sorted_indices[0]] if sorted_indices else None
-            }
-        
-        def visualize_results(self, save_path=None):
-            """可视化变点检测结果"""
-            fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-            
-            metrics = ['speed', 'flow', 'congestion', 'travel_time']
-            colors = ['b', 'g', 'r', 'purple']
-            titles = ['平均速度', '平均流量', '拥堵指数', '旅行时间']
-            ylabels = ['速度 (mph)', '流量 (辆/小时)', '拥堵指数', '旅行时间 (分钟)']
-            
-            for idx, (metric, color, title, ylabel) in enumerate(zip(metrics, colors, titles, ylabels)):
-                ax = axes[idx//2, idx%2]
-                
-                # 绘制性能曲线
-                ax.plot(self.p_values, self.performance_data[metric], 
-                       f'{color}-', linewidth=2, label=title)
-                
-                # 标记变点
-                if metric in self.change_points:
-                    cps = self.change_points[metric]['p_values']
-                    for cp in cps:
-                        idx_point = np.argmin(np.abs(self.p_values - cp))
-                        ax.plot(cp, self.performance_data[metric][idx_point], 
-                               'r*', markersize=12, zorder=5)
-                        ax.axvline(x=cp, color='r', linestyle='--', alpha=0.5)
-                        ax.text(cp, ax.get_ylim()[1]*0.9, f'p={cp:.3f}', 
-                               rotation=90, fontsize=9, color='r', ha='right')
-                
-                ax.set_xlabel('自动驾驶比例 (p)', fontsize=11)
-                ax.set_ylabel(ylabel, fontsize=11, color=color)
-                ax.tick_params(axis='y', labelcolor=color)
-                ax.set_title(title, fontsize=12)
-                ax.grid(True, alpha=0.3)
-            
-            plt.suptitle('基于CA仿真数据的变点检测', fontsize=16, fontweight='bold')
-            plt.tight_layout()
-            
-            if save_path:
-                plt.savefig(save_path, dpi=300, bbox_inches='tight')
-                print(f"变点检测图已保存到: {save_path}")
-            
-            return fig
-        
-        def get_summary(self):
-            """获取总结报告"""
-            consensus = self.change_points.get('consensus', {})
-            top_point = consensus.get('top_point')
-            
-            summary = {
-                'top_critical_point': top_point,
-                'consensus_points': consensus.get('p_values', []),
-                'consensus_strengths': consensus.get('strength', []),
-                'individual_points': {},
-                'interpretation': {}
-            }
-            
-            # 收集各指标的变点
-            for metric in ['speed', 'flow', 'congestion', 'travel_time']:
-                if metric in self.change_points:
-                    summary['individual_points'][metric] = {
-                        'p_values': self.change_points[metric]['p_values'],
-                        'num_points': len(self.change_points[metric]['p_values'])
-                    }
-            
-            # 提供解释
-            if top_point is not None:
-                if top_point < 0.2:
-                    summary['interpretation'] = {
-                        'level': '低临界点',
-                        'description': '少量自动驾驶车辆即可带来显著改善',
-                        'policy_implication': '应积极推广，初期投资回报率高'
-                    }
-                elif top_point < 0.5:
-                    summary['interpretation'] = {
-                        'level': '中临界点',
-                        'description': '需要适度自动驾驶渗透率才能突破性能瓶颈',
-                        'policy_implication': '需要政策引导和市场推广相结合'
-                    }
-                else:
-                    summary['interpretation'] = {
-                        'level': '高临界点',
-                        'description': '需要较高的自动驾驶比例才能实现显著改进',
-                        'policy_implication': '需要长期政策支持和基础设施建设'
-                    }
-            
-            return summary
+# 设置中文显示
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
 
 
-def load_pelt_data(filename='pelt_ready_data.json'):
+class SimplePELTDetector:
     """
-    加载PELT数据
+    简化版PELT变点检测器
+    """
     
-    参数:
-    filename: 数据文件名
+    def __init__(self, min_distance=2, penalty=3.0, smooth_window=5):
+        """
+        初始化检测器
+        
+        参数:
+        min_distance: 最小变点间距
+        penalty: 惩罚参数（控制变点数量）
+        smooth_window: 平滑窗口大小
+        """
+        self.min_distance = min_distance
+        self.penalty = penalty
+        self.smooth_window = smooth_window
+        
+        # 确保平滑窗口是奇数且大于多项式阶数
+        if self.smooth_window % 2 == 0:
+            self.smooth_window += 1
+        if self.smooth_window < 5:  # 多项式阶数是3，所以窗口至少为5
+            self.smooth_window = 5
     
-    返回:
-    p_values, simulation_results格式的数据
+    def detect_change_points_alternative(self, signal_data):
+        """
+        替代PELT算法：使用梯度变化检测变点
+        """
+        # 确保信号长度足够
+        if len(signal_data) < 10:
+            print(f"信号长度不足 ({len(signal_data)})，无法检测变点")
+            return []
+        
+        # 平滑信号（Savitzky-Golay滤波器）
+        window_size = min(self.smooth_window, len(signal_data))
+        if window_size < 5:  # 确保窗口足够大
+            window_size = min(5, len(signal_data))
+        
+        # 确保窗口是奇数
+        if window_size % 2 == 0:
+            window_size -= 1
+        
+        # 确保多项式阶数小于窗口大小
+        polyorder = min(3, window_size - 1)
+        
+        try:
+            smoothed = signal.savgol_filter(signal_data, window_size, polyorder)
+        except:
+            # 如果平滑失败，使用移动平均
+            smoothed = np.convolve(signal_data, np.ones(window_size)/window_size, mode='same')
+        
+        # 计算一阶导数（梯度）
+        gradient = np.gradient(smoothed)
+        
+        # 计算梯度绝对值的移动平均
+        abs_gradient = np.abs(gradient)
+        gradient_ma = np.convolve(abs_gradient, np.ones(window_size)/window_size, mode='same')
+        
+        # 检测变点（梯度变化显著的点）
+        change_points = []
+        threshold = np.mean(gradient_ma) + self.penalty * np.std(gradient_ma)
+        
+        for i in range(window_size, len(gradient_ma) - window_size):
+            if gradient_ma[i] > threshold:
+                # 检查是否与之前的变点太近
+                if not change_points or (i - change_points[-1]) >= self.min_distance:
+                    change_points.append(i)
+        
+        return change_points
+    
+    def detect_change_points_simple(self, signal_data):
+        """
+        简单变点检测：基于均值变化
+        """
+        n = len(signal_data)
+        if n < 10:
+            return []
+        
+        change_points = []
+        min_segment = max(3, self.min_distance)
+        
+        # 使用滑动窗口检测均值变化
+        for i in range(min_segment, n - min_segment):
+            left_mean = np.mean(signal_data[:i])
+            right_mean = np.mean(signal_data[i:])
+            
+            # 计算均值差异的统计显著性
+            left_std = np.std(signal_data[:i]) if len(signal_data[:i]) > 1 else 0.1
+            right_std = np.std(signal_data[i:]) if len(signal_data[i:]) > 1 else 0.1
+            z_score = abs(left_mean - right_mean) / np.sqrt(left_std**2/len(signal_data[:i]) + right_std**2/len(signal_data[i:]))
+            
+            if z_score > self.penalty:
+                # 检查是否与之前的变点太近
+                if not change_points or (i - change_points[-1]) >= self.min_distance:
+                    change_points.append(i)
+        
+        return change_points
+    
+    def detect_change_points_cusum(self, signal_data):
+        """
+        使用CUSUM算法检测变点
+        """
+        n = len(signal_data)
+        if n < 10:
+            return []
+        
+        # 计算累积和
+        mean_val = np.mean(signal_data)
+        residuals = signal_data - mean_val
+        cusum = np.cumsum(residuals)
+        
+        # 标准化CUSUM
+        cusum_norm = np.abs(cusum) / np.sqrt(np.arange(1, n+1) * np.var(signal_data) + 1e-10)
+        
+        # 检测变点
+        change_points = []
+        threshold = np.mean(cusum_norm) + self.penalty * np.std(cusum_norm)
+        
+        for i in range(self.min_distance, n - self.min_distance):
+            if cusum_norm[i] > threshold:
+                if not change_points or (i - change_points[-1]) >= self.min_distance:
+                    change_points.append(i)
+        
+        return change_points
+    
+    def detect_all_change_points(self):
+        """
+        检测所有指标的变点
+        """
+        if not hasattr(self, 'data'):
+            print("请先使用set_data()方法设置数据")
+            return {}
+        
+        change_points = {}
+        
+        # 检测每个指标的变点
+        for metric_name, signal_data in self.data.items():
+            if metric_name == 'p':  # 跳过p值本身
+                continue
+            
+            # 尝试三种检测方法
+            try:
+                cp1 = self.detect_change_points_alternative(signal_data)
+            except:
+                cp1 = []
+            
+            cp2 = self.detect_change_points_simple(signal_data)
+            cp3 = self.detect_change_points_cusum(signal_data)
+            
+            # 合并结果（取并集）
+            all_cps = sorted(set(cp1 + cp2 + cp3))
+            
+            # 过滤太接近的变点
+            filtered_cps = []
+            for cp in all_cps:
+                if not filtered_cps or (cp - filtered_cps[-1]) >= self.min_distance:
+                    filtered_cps.append(cp)
+            
+            change_points[metric_name] = filtered_cps
+        
+        return change_points
+    
+    def set_data(self, data_dict):
+        """
+        设置要检测的数据
+        
+        参数:
+        data_dict: 字典，键是指标名称，值是数据序列
+        """
+        self.data = data_dict
+        self.n_points = len(next(iter(data_dict.values())))
+    
+    def get_p_values_at_change_points(self, change_points_dict):
+        """
+        获取变点对应的p值
+        """
+        if not hasattr(self, 'data') or 'p' not in self.data:
+            print("数据中没有p值序列")
+            return {}
+        
+        p_series = self.data['p']
+        p_change_points = {}
+        
+        for metric, cps in change_points_dict.items():
+            p_cps = []
+            for cp_idx in cps:
+                if 0 <= cp_idx < len(p_series):
+                    p_cps.append(p_series[cp_idx])
+            p_change_points[metric] = p_cps
+        
+        return p_change_points
+
+
+def load_simulation_json(filename):
+    """
+    加载仿真JSON文件
     """
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
         
+        p_values = data['p_values']
+        results = data['results']
+        
         print(f"成功加载 {filename}")
-        print(f"数据包含 {len(data['p'])} 个p值点")
+        print(f"数据包含 {len(p_values)} 个p值点")
         
-        # 转换为FixedChangePointDetector需要的格式
-        p_values = data['p']
-        simulation_results = []
-        
-        for i, p in enumerate(p_values):
-            result = {
-                'mean_speed': data['speed'][i],
-                'mean_flow': data['flow'][i],
-                'congestion_index': data['congestion'][i]
-            }
-            if 'travel_time' in data:
-                result['travel_time'] = data['travel_time'][i]
-            simulation_results.append(result)
-        
-        return p_values, simulation_results
+        return p_values, results
     
-    except FileNotFoundError:
-        print(f"文件 {filename} 不存在")
+    except Exception as e:
+        print(f"加载JSON文件失败: {e}")
         return None, None
 
 
-def load_simulation_results(filename='simulation_results_optimized.json'):
+def extract_metrics_for_pelt(p_values, results):
     """
-    直接加载仿真结果文件
-    
-    参数:
-    filename: 仿真结果文件名
-    
-    返回:
-    p_values, simulation_results
+    从仿真结果中提取PELT需要的指标
     """
-    try:
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        
-        print(f"成功加载 {filename}")
-        print(f"数据包含 {len(data['p_values'])} 个p值点")
-        
-        return data['p_values'], data['results']
+    # 按p值排序
+    sorted_indices = np.argsort(p_values)
+    sorted_p = np.array(p_values)[sorted_indices]
     
-    except FileNotFoundError:
-        print(f"文件 {filename} 不存在")
-        return None, None
+    # 初始化指标字典
+    metrics = {
+        'p': sorted_p,
+        'speed': [],
+        'flow': [],
+        'congestion': [],
+        'density': [],
+        'travel_time': []
+    }
+    
+    # 按排序后的顺序提取数据
+    for idx in sorted_indices:
+        result = results[idx]
+        metrics['speed'].append(float(result['mean_speed']))
+        metrics['flow'].append(float(result['mean_flow']))
+        metrics['congestion'].append(float(result['congestion_index']))
+        metrics['density'].append(float(result['mean_density']))
+        
+        # 计算旅行时间
+        speed = float(result['mean_speed'])
+        if speed > 0:
+            travel_time = 10 / speed * 60  # 10km，转换为分钟
+        else:
+            travel_time = 999.0
+        metrics['travel_time'].append(travel_time)
+    
+    # 转换为numpy数组
+    for key in metrics:
+        metrics[key] = np.array(metrics[key])
+    
+    return metrics
 
 
-def load_simulation_csv(filename='simulation_results_optimized.csv'):
+def analyze_change_points(p_values, results, visualize=True):
     """
-    从CSV文件加载仿真结果
-    
-    参数:
-    filename: CSV文件名
-    
-    返回:
-    p_values, simulation_results
-    """
-    try:
-        df = pd.read_csv(filename)
-        print(f"成功加载 {filename}")
-        print(f"数据包含 {len(df)} 个仿真结果")
-        
-        p_values = df['p_value'].tolist()
-        simulation_results = df.to_dict('records')
-        
-        return p_values, simulation_results
-    
-    except FileNotFoundError:
-        print(f"文件 {filename} 不存在")
-        return None, None
-
-
-def analyze_change_points(p_values, simulation_results, visualize=True):
-    """
-    分析变点并生成报告
-    
-    参数:
-    p_values: p值列表
-    simulation_results: 仿真结果列表
-    visualize: 是否生成可视化
-    
-    返回:
-    detector, summary
+    分析仿真结果中的变点
     """
     print("\n" + "="*60)
     print("开始PELT变点检测分析")
     print("="*60)
     
-    # 创建检测器
-    detector = FixedChangePointDetector(p_values, simulation_results)
+    # 提取指标
+    print("\n提取性能指标...")
+    metrics = extract_metrics_for_pelt(p_values, results)
+    
+    # 创建并配置检测器
+    print("初始化变点检测器...")
+    detector = SimplePELTDetector(
+        min_distance=5,
+        penalty=5.0,
+        smooth_window=9
+    )
+    
+    detector.set_data(metrics)
     
     # 检测变点
-    print("\n检测性能指标变点...")
+    print("检测性能指标变点...")
     change_points = detector.detect_all_change_points()
     
-    # 获取总结
-    summary = detector.get_summary()
+    # 获取对应的p值
+    p_at_change_points = detector.get_p_values_at_change_points(change_points)
     
     # 打印结果
     print("\n" + "="*60)
     print("变点检测结果")
     print("="*60)
     
-    top_point = summary['top_critical_point']
-    if top_point is not None:
-        print(f"\n主要临界点: p = {top_point:.3f}")
-        print(f"临界点级别: {summary['interpretation']['level']}")
-        print(f"描述: {summary['interpretation']['description']}")
-        print(f"政策含义: {summary['interpretation']['policy_implication']}")
-    else:
-        print("\n未检测到明显的主要临界点")
+    summary = {}
+    for metric, cp_indices in change_points.items():
+        if metric == 'p':
+            continue
+            
+        p_values_at_cp = p_at_change_points.get(metric, [])
+        
+        print(f"\n{metric} 指标:")
+        if cp_indices:
+            print(f"  检测到 {len(cp_indices)} 个变点")
+            for i, (cp_idx, p_val) in enumerate(zip(cp_indices, p_values_at_cp)):
+                print(f"  变点 {i+1}: 索引={cp_idx}, p={p_val:.3f}")
+                
+                # 保存到摘要
+                if metric not in summary:
+                    summary[metric] = []
+                summary[metric].append({
+                    'index': cp_idx,
+                    'p_value': float(p_val),
+                    'value_before': float(metrics[metric][cp_idx-1]) if cp_idx > 0 else None,
+                    'value_after': float(metrics[metric][cp_idx]) if cp_idx < len(metrics[metric]) else None
+                })
+        else:
+            print(f"  未检测到明显变点")
     
-    # 显示各指标的变点
-    print(f"\n各指标变点检测结果:")
-    for metric, data in summary['individual_points'].items():
-        if data['p_values']:
-            p_str = ', '.join([f'{p:.3f}' for p in data['p_values']])
-            print(f"  {metric}: {data['num_points']}个变点 at p={p_str}")
+    # 计算综合临界点
+    print("\n" + "="*60)
+    print("综合临界点分析")
+    print("="*60)
     
-    # 显示共识变点
-    consensus_points = summary['consensus_points']
-    if len(consensus_points) > 1:
-        print(f"\n共识变点 (按强度排序):")
-        for i, (p, strength) in enumerate(zip(consensus_points, summary['consensus_strengths'])):
-            print(f"  第{i+1}位: p={p:.3f} (强度: {int(strength)}个指标支持)")
+    all_p_values = []
+    for metric, cps in summary.items():
+        for cp in cps:
+            all_p_values.append(cp['p_value'])
     
-    # 生成可视化
+    if all_p_values:
+        # 统计最常见的临界点
+        from collections import Counter
+        # 将p值四舍五入到2位小数进行统计
+        rounded_p_values = [round(p, 2) for p in all_p_values]
+        p_counter = Counter(rounded_p_values)
+        
+        print("\n临界点统计:")
+        for p_val, count in p_counter.most_common():
+            print(f"  p={p_val:.2f}: {count}个指标检测到变点")
+        
+        # 找到最重要的临界点（出现次数最多）
+        if p_counter:
+            most_common_p = p_counter.most_common(1)[0][0]
+            print(f"\n最重要的临界点: p ≈ {most_common_p:.2f}")
+            
+            # 找出在这个临界点附近变化的指标
+            print("在这个临界点附近发生变化的指标:")
+            threshold = 0.05  # ±0.05的容忍度
+            for metric, cps in summary.items():
+                for cp in cps:
+                    if abs(cp['p_value'] - most_common_p) <= threshold:
+                        change_magnitude = abs(cp['value_after'] - cp['value_before']) if cp['value_before'] and cp['value_after'] else 0
+                        change_percent = (change_magnitude / cp['value_before'] * 100) if cp['value_before'] and cp['value_before'] != 0 else 0
+                        
+                        direction = "增加" if cp['value_after'] > cp['value_before'] else "减少"
+                        print(f"  {metric}: {direction} {change_percent:.1f}%")
+    
+    # 可视化
     if visualize:
-        print("\n生成可视化图表...")
-        fig = detector.visualize_results(save_path='change_point_detection_from_ca.png')
-    
-    # 保存结果
-    results = {
-        'p_values': p_values,
-        'simulation_results': simulation_results,
-        'change_points': change_points,
-        'summary': summary,
-        'detection_method': 'FixedChangePointDetector'
-    }
-    
-    with open('change_point_analysis_results.json', 'w') as f:
-        json.dump(results, f, indent=4, default=str)
-    
-    print(f"\n分析结果已保存到: change_point_analysis_results.json")
+        visualize_change_points(metrics, change_points, p_at_change_points)
     
     return detector, summary
 
 
-def generate_policy_recommendations(summary):
+def visualize_change_points(metrics, change_points, p_at_change_points, save_path='change_points_analysis.png'):
     """
-    基于临界点分析生成政策建议
-    
-    参数:
-    summary: 变点检测总结
-    
-    返回:
-    政策建议字典
+    可视化变点检测结果
     """
-    top_point = summary.get('top_critical_point')
+    # 获取要绘制的指标列表（排除p值）
+    metric_names = [k for k in metrics.keys() if k != 'p']
+    n_metrics = len(metric_names)
     
-    if top_point is None:
-        return {
-            'stage': '基础研究阶段',
-            'target_p': 0.0,
-            'recommendations': [
-                '继续开展自动驾驶技术基础研究',
-                '建立小规模测试示范区',
-                '收集真实混合交通数据',
-                '完善法律法规框架'
-            ]
-        }
+    # 创建子图，每行最多3个
+    n_cols = min(3, n_metrics)
+    n_rows = (n_metrics + n_cols - 1) // n_cols
     
-    # 根据临界点制定分阶段政策
-    if top_point < 0.2:
-        recommendations = {
-            'stage': '快速启动阶段',
-            'target_p': top_point,
-            'description': f'低临界点(p={top_point:.3f})，少量自动驾驶即可显著改善交通',
-            'timeline': '1-3年',
-            'recommendations': [
-                f'设定短期目标: 自动驾驶比例达到{top_point:.1%}',
-                '在交通拥堵严重区域优先部署自动驾驶车辆',
-                '为早期采用者提供购车补贴或税收优惠',
-                '建设V2X通信基础设施',
-                '开展公众宣传和教育'
-            ],
-            'expected_benefits': [
-                '交通拥堵减少20-30%',
-                '平均速度提高15-25%',
-                '交通事故率降低10-20%'
-            ]
-        }
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 4*n_rows))
     
-    elif top_point < 0.5:
-        recommendations = {
-            'stage': '稳步推广阶段',
-            'target_p': top_point,
-            'description': f'中等临界点(p={top_point:.3f})，需要适度普及才能突破瓶颈',
-            'timeline': '3-8年',
-            'recommendations': [
-                f'设定中期目标: 自动驾驶比例达到{top_point:.1%}',
-                '推广自动驾驶出租车和共享出行服务',
-                '建立混合交通智能管理系统',
-                '更新交通法规以适应自动驾驶',
-                '建设智慧道路基础设施',
-                '加强网络安全和数据隐私保护'
-            ],
-            'expected_benefits': [
-                '道路通行能力提高30-40%',
-                '能源消耗降低15-25%',
-                '交通系统效率提升40-50%'
-            ]
-        }
+    # 如果只有一个子图，确保axes是列表
+    if n_metrics == 1:
+        axes = np.array([axes])
     
-    else:
-        recommendations = {
-            'stage': '全面转型阶段',
-            'target_p': top_point,
-            'description': f'高临界点(p={top_point:.3f})，需要高度普及才能实现最大效益',
-            'timeline': '8-15年',
-            'recommendations': [
-                f'设定长期目标: 自动驾驶比例达到{top_point:.1%}',
-                '全面更新交通法规体系',
-                '建设全自动驾驶专用道路',
-                '推动传统燃油车逐步淘汰',
-                '建立国家级自动驾驶数据中心',
-                '发展基于自动驾驶的智慧城市'
-            ],
-            'expected_benefits': [
-                '交通拥堵基本消除',
-                '道路安全水平大幅提升',
-                '交通系统效率翻倍',
-                '城市空间利用优化'
-            ]
-        }
+    # 展平axes数组以便迭代
+    axes_flat = axes.flatten() if n_metrics > 1 else axes
     
-    return recommendations
-
-
-def visualize_policy_recommendations(recommendations, save_path=None):
-    """
-    可视化政策建议
+    p_series = metrics['p']
     
-    参数:
-    recommendations: 政策建议字典
-    save_path: 保存路径
-    """
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-    
-    # 左图：政策建议总结
-    ax1 = axes[0]
-    ax1.axis('off')
-    
-    text_content = (
-        f"自动驾驶推广政策建议\n\n"
-        f"阶段: {recommendations['stage']}\n"
-        f"目标自动驾驶比例: p ≥ {recommendations['target_p']:.3f}\n"
-        f"时间规划: {recommendations['timeline']}\n\n"
-        f"阶段描述:\n{recommendations['description']}\n\n"
-        f"具体建议:\n"
-    )
-    
-    for i, rec in enumerate(recommendations['recommendations'], 1):
-        text_content += f"{i}. {rec}\n"
-    
-    text_content += f"\n预期效益:\n"
-    for i, benefit in enumerate(recommendations['expected_benefits'], 1):
-        text_content += f"• {benefit}\n"
-    
-    ax1.text(0.05, 0.95, text_content, fontsize=11, 
-            verticalalignment='top', linespacing=1.6)
-    ax1.set_title('政策建议总结', fontsize=14, fontweight='bold')
-    
-    # 右图：路线图
-    ax2 = axes[1]
-    
-    # 创建阶段时间轴
-    stages = ['当前', '近期', '中期', '长期']
-    time_points = [0, 3, 8, 15]  # 年
-    
-    # 目标p值（假设线性增长到临界点）
-    target_p = recommendations['target_p']
-    p_values = [0, target_p * 0.3, target_p * 0.7, target_p]
-    
-    # 绘制时间轴
-    ax2.plot(time_points, p_values, 'bo-', linewidth=3, markersize=10)
-    
-    # 标记阶段
-    for i, (time, p, stage) in enumerate(zip(time_points, p_values, stages)):
-        ax2.plot(time, p, 'ro', markersize=15)
-        ax2.text(time, p + 0.05, stage, ha='center', fontsize=12, fontweight='bold')
+    for idx, metric in enumerate(metric_names):
+        if idx >= len(axes_flat):
+            break
+            
+        ax = axes_flat[idx]
+        data = metrics[metric]
         
-        # 添加说明
-        if i > 0:
-            ax2.annotate(f'p={p:.2f}', xy=(time, p), 
-                        xytext=(time, p - 0.1),
-                        arrowprops=dict(arrowstyle='->', color='gray'),
-                        ha='center', fontsize=10)
+        # 绘制原始数据
+        ax.plot(p_series, data, 'b-', linewidth=2, alpha=0.7, label=f'{metric}')
+        
+        # 标记变点
+        if metric in change_points and change_points[metric]:
+            cp_indices = change_points[metric]
+            cp_p_values = p_at_change_points.get(metric, [])
+            
+            for cp_idx, p_val in zip(cp_indices, cp_p_values):
+                if 0 <= cp_idx < len(data):
+                    ax.axvline(x=p_val, color='red', linestyle='--', alpha=0.7, linewidth=1)
+                    ax.plot(p_val, data[cp_idx], 'ro', markersize=6, markerfacecolor='none')
+        
+        ax.set_xlabel('自动驾驶比例 (p)', fontsize=10)
+        
+        # 根据指标类型设置合适的ylabel
+        if metric == 'speed':
+            ax.set_ylabel('速度 (mph)', fontsize=10)
+        elif metric == 'flow':
+            ax.set_ylabel('流量 (辆/小时)', fontsize=10)
+        elif metric == 'congestion':
+            ax.set_ylabel('拥堵指数', fontsize=10)
+        elif metric == 'density':
+            ax.set_ylabel('密度 (辆/km)', fontsize=10)
+        elif metric == 'travel_time':
+            ax.set_ylabel('旅行时间 (分钟)', fontsize=10)
+        else:
+            ax.set_ylabel(metric, fontsize=10)
+        
+        ax.set_title(f'{metric} 变点检测', fontsize=12)
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=9)
     
-    ax2.set_xlabel('时间 (年)', fontsize=12)
-    ax2.set_ylabel('自动驾驶比例 (p)', fontsize=12)
-    ax2.set_title('自动驾驶推广路线图', fontsize=14, fontweight='bold')
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xlim(-1, 16)
-    ax2.set_ylim(-0.05, 1.05)
+    # 隐藏多余的子图
+    for idx in range(len(metric_names), len(axes_flat)):
+        axes_flat[idx].set_visible(False)
     
-    plt.suptitle('基于临界点分析的自动驾驶推广策略', fontsize=16, fontweight='bold')
+    plt.suptitle('CA模型PELT变点检测分析', fontsize=16, fontweight='bold')
     plt.tight_layout()
     
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"政策建议图已保存到: {save_path}")
+        print(f"\n变点检测图表已保存到: {save_path}")
     
     return fig
+
+def analyze_change_points(p_values, results, visualize=True):
+    """
+    分析仿真结果中的变点
+    """
+    print("\n" + "="*60)
+    print("开始PELT变点检测分析")
+    print("="*60)
+    
+    # 提取指标
+    print("\n提取性能指标...")
+    metrics = extract_metrics_for_pelt(p_values, results)
+    
+    # 创建并配置检测器
+    print("初始化变点检测器...")
+    detector = SimplePELTDetector(
+        min_distance=3,
+        penalty=2.5,
+        smooth_window=7
+    )
+    
+    detector.set_data(metrics)
+    
+    # 检测变点
+    print("检测性能指标变点...")
+    change_points = detector.detect_all_change_points()
+    
+    # 获取对应的p值
+    p_at_change_points = detector.get_p_values_at_change_points(change_points)
+    
+    # 打印结果
+    print("\n" + "="*60)
+    print("变点检测结果")
+    print("="*60)
+    
+    summary = {}
+    for metric, cp_indices in change_points.items():
+        if metric == 'p':
+            continue
+            
+        p_values_at_cp = p_at_change_points.get(metric, [])
+        
+        print(f"\n{metric} 指标:")
+        if cp_indices:
+            print(f"  检测到 {len(cp_indices)} 个变点")
+            for i, (cp_idx, p_val) in enumerate(zip(cp_indices, p_values_at_cp)):
+                print(f"  变点 {i+1}: 索引={cp_idx}, p={p_val:.3f}")
+                
+                # 保存到摘要
+                if metric not in summary:
+                    summary[metric] = []
+                
+                # 安全地获取前后值
+                value_before = None
+                value_after = None
+                
+                if 0 <= cp_idx < len(metrics[metric]):
+                    value_after = float(metrics[metric][cp_idx])
+                    if cp_idx > 0:
+                        value_before = float(metrics[metric][cp_idx-1])
+                    elif cp_idx < len(metrics[metric]) - 1:
+                        value_before = float(metrics[metric][cp_idx+1])
+                
+                summary[metric].append({
+                    'index': cp_idx,
+                    'p_value': float(p_val),
+                    'value_before': value_before,
+                    'value_after': value_after
+                })
+        else:
+            print(f"  未检测到明显变点")
+    
+    # 计算综合临界点
+    print("\n" + "="*60)
+    print("综合临界点分析")
+    print("="*60)
+    
+    all_p_values = []
+    for metric, cps in summary.items():
+        for cp in cps:
+            if cp['value_before'] is not None and cp['value_after'] is not None:
+                all_p_values.append(cp['p_value'])
+    
+    if all_p_values:
+        # 统计最常见的临界点
+        from collections import Counter
+        # 将p值四舍五入到2位小数进行统计
+        rounded_p_values = [round(p, 2) for p in all_p_values]
+        p_counter = Counter(rounded_p_values)
+        
+        print("\n临界点统计:")
+        for p_val, count in p_counter.most_common():
+            print(f"  p={p_val:.2f}: {count}个指标检测到变点")
+        
+        # 找到最重要的临界点（出现次数最多）
+        if p_counter:
+            most_common_p = p_counter.most_common(1)[0][0]
+            print(f"\n最重要的临界点: p ≈ {most_common_p:.2f}")
+            
+            # 找出在这个临界点附近变化的指标
+            print("在这个临界点附近发生变化的指标:")
+            threshold = 0.05  # ±0.05的容忍度
+            for metric, cps in summary.items():
+                for cp in cps:
+                    if abs(cp['p_value'] - most_common_p) <= threshold:
+                        if cp['value_before'] is not None and cp['value_after'] is not None:
+                            change_magnitude = abs(cp['value_after'] - cp['value_before'])
+                            if cp['value_before'] != 0:
+                                change_percent = (change_magnitude / cp['value_before'] * 100)
+                            else:
+                                change_percent = 0
+                            
+                            direction = "增加" if cp['value_after'] > cp['value_before'] else "减少"
+                            print(f"  {metric}: {direction} {change_percent:.1f}%")
+                        else:
+                            print(f"  {metric}: 数据缺失")
+    
+    # 可视化
+    if visualize:
+        try:
+            visualize_change_points(metrics, change_points, p_at_change_points)
+        except Exception as e:
+            print(f"\n可视化时出错: {e}")
+            # 尝试简化版可视化
+            try:
+                visualize_simple(metrics, change_points, p_at_change_points)
+            except:
+                print("简化可视化也失败，跳过图表")
+    
+    return detector, summary
 
 
 def main():
     """
-    主函数：使用CA数据运行PELT变点检测
+    主函数：运行PELT变点检测
     """
     print("=" * 60)
     print("步骤3：使用CA仿真数据运行PELT变点检测")
     print("=" * 60)
+    
+    # 检查当前目录下的数据文件
+    data_files = []
+    for file in ['pelt_ready_data.json', 'simulation_results_optimized.json', 'simulation_results_optimized.csv']:
+        if os.path.exists(file):
+            data_files.append(file)
+    
+    if data_files:
+        print(f"找到以下数据文件: {', '.join(data_files)}")
+    else:
+        print("未找到数据文件，请先运行数据提取模块")
+        return
     
     print("\n数据来源选项:")
     print("1. 使用PELT专用格式数据 (pelt_ready_data.json)")
@@ -614,155 +604,122 @@ def main():
     
     choice = input("\n请选择数据来源 (1-4): ").strip()
     
-    p_values = None
-    simulation_results = None
-    
     if choice == '1':
-        p_values, simulation_results = load_pelt_data()
-    
+        filename = 'pelt_ready_data.json'
     elif choice == '2':
-        p_values, simulation_results = load_simulation_results()
-    
+        filename = 'simulation_results_optimized.json'
     elif choice == '3':
-        p_values, simulation_results = load_simulation_csv()
-    
+        filename = 'simulation_results_optimized.csv'
     elif choice == '4':
-        filename = input("请输入数据文件完整路径: ").strip()
-        if filename.endswith('.json'):
-            if 'pelt_ready' in filename:
-                p_values, simulation_results = load_pelt_data(filename)
-            else:
-                p_values, simulation_results = load_simulation_results(filename)
-        elif filename.endswith('.csv'):
-            p_values, simulation_results = load_simulation_csv(filename)
-        else:
-            print("不支持的文件格式，请使用.json或.csv文件")
-            return
-    
+        filename = input("请输入数据文件路径: ").strip()
     else:
         print("无效选择，退出程序")
         return
     
-    if p_values is None or simulation_results is None:
-        print("数据加载失败，请检查文件路径和格式")
+    if not os.path.exists(filename):
+        print(f"文件 {filename} 不存在")
+        return
+    
+    # 根据文件类型加载数据
+    if filename.endswith('.json'):
+        if 'pelt_ready' in filename:
+            # 加载PELT专用格式
+            try:
+                with open(filename, 'r') as f:
+                    pelt_data = json.load(f)
+                
+                print(f"成功加载 {filename}")
+                
+                # 转换为统一格式
+                p_values = pelt_data['p']
+                # 创建虚拟results结构
+                results = []
+                for i, p in enumerate(p_values):
+                    result = {
+                        'p_value': p,
+                        'mean_speed': pelt_data['speed'][i],
+                        'mean_flow': pelt_data['flow'][i],
+                        'congestion_index': pelt_data['congestion'][i],
+                        'mean_density': 20.0,  # 默认值
+                        'travel_time': pelt_data.get('travel_time', [10]*len(p_values))[i]
+                    }
+                    results.append(result)
+                
+            except Exception as e:
+                print(f"加载PELT专用格式失败: {e}")
+                return
+        else:
+            # 加载仿真JSON
+            p_values, results = load_simulation_json(filename)
+            if p_values is None:
+                return
+    
+    elif filename.endswith('.csv'):
+        # 加载CSV文件
+        try:
+            df = pd.read_csv(filename, encoding='utf-8-sig')
+            print(f"成功加载 {filename}")
+            print(f"数据包含 {len(df)} 行")
+            
+            # 转换为统一格式
+            p_values = df['p_value'].tolist()
+            results = []
+            for _, row in df.iterrows():
+                result = {
+                    'p_value': row['p_value'],
+                    'mean_speed': row['mean_speed'],
+                    'mean_flow': row['mean_flow'],
+                    'congestion_index': row['congestion_index'],
+                    'mean_density': row.get('mean_density', 20.0),
+                    'travel_time': 10 / row['mean_speed'] * 60 if row['mean_speed'] > 0 else 999.0
+                }
+                results.append(result)
+        
+        except Exception as e:
+            print(f"加载CSV文件失败: {e}")
+            return
+    
+    else:
+        print("不支持的文件格式")
         return
     
     # 运行变点检测
-    detector, summary = analyze_change_points(p_values, simulation_results, visualize=True)
-    
-    # 生成政策建议
-    print("\n" + "="*60)
-    print("生成政策建议")
-    print("="*60)
-    
-    recommendations = generate_policy_recommendations(summary)
-    
-    print(f"\n政策建议 ({recommendations['stage']}):")
-    print(f"目标自动驾驶比例: p ≥ {recommendations['target_p']:.3f}")
-    print(f"时间规划: {recommendations['timeline']}")
-    print(f"描述: {recommendations['description']}")
-    
-    print(f"\n具体建议:")
-    for i, rec in enumerate(recommendations['recommendations'], 1):
-        print(f"  {i}. {rec}")
-    
-    print(f"\n预期效益:")
-    for benefit in recommendations['expected_benefits']:
-        print(f"  • {benefit}")
-    
-    # 可视化政策建议
-    fig = visualize_policy_recommendations(
-        recommendations, 
-        save_path='policy_recommendations_from_pelt.png'
-    )
-    
-    # 保存政策建议
-    with open('policy_recommendations_final.json', 'w') as f:
-        json.dump(recommendations, f, indent=4, ensure_ascii=False)
-    
-    print(f"\n政策建议已保存到: policy_recommendations_final.json")
-    
-    # 显示关键结论
-    print("\n" + "="*60)
-    print("关键结论")
-    print("="*60)
-    
-    top_point = summary['top_critical_point']
-    if top_point:
-        print(f"1. 主要临界点位于 p = {top_point:.3f}")
-        print(f"2. 这是性能改善的转折点，超过此点后效益加速显现")
-        print(f"3. 建议将 {top_point:.1%} 作为阶段性目标")
-        print(f"4. 临界点分析为政策制定提供了科学依据")
-    else:
-        print("1. 未检测到明显的临界点")
-        print("2. 性能改善可能是渐进的")
-        print("3. 建议采取渐进式推广策略")
-    
-    print("\n" + "="*60)
-    print("PELT变点检测完成!")
-    print("="*60)
+    try:
+        detector, summary = analyze_change_points(p_values, results, visualize=True)
+        
+        # 保存结果
+        output_filename = 'pelt_analysis_results.json'
+        with open(output_filename, 'w') as f:
+            json.dump({
+                'data_source': filename,
+                'summary': summary,
+                'analysis_time': pd.Timestamp.now().isoformat()
+            }, f, indent=4, cls=NumpyEncoder)
+        
+        print(f"\n分析结果已保存到: {output_filename}")
+        
+        # 显示图表
+        plt.show()
+        
+    except Exception as e:
+        print(f"变点检测过程中出错: {e}")
+        import traceback
+        traceback.print_exc()
 
 
-def quick_demo():
-    """
-    快速演示：使用示例数据运行PELT
-    """
-    print("快速演示：使用示例数据运行PELT变点检测")
-    
-    # 生成示例数据
-    p_values = np.linspace(0, 1, 21).tolist()
-    
-    # 创建示例性能曲线（有临界点的S形曲线）
-    speeds = []
-    for p in p_values:
-        # S形曲线，临界点在p=0.4附近
-        speed = 30 + 30 / (1 + np.exp(-15 * (p - 0.4)))
-        speeds.append(speed)
-    
-    flows = []
-    for p in p_values:
-        # 另一个临界点在p=0.6附近
-        flow = 1000 + 800 / (1 + np.exp(-12 * (p - 0.6)))
-        flows.append(flow)
-    
-    simulation_results = []
-    for i, p in enumerate(p_values):
-        simulation_results.append({
-            'mean_speed': speeds[i],
-            'mean_flow': flows[i],
-            'congestion_index': max(0, 1 - speeds[i] / 60)
-        })
-    
-    # 运行变点检测
-    detector, summary = analyze_change_points(p_values, simulation_results, visualize=True)
-    
-    return detector, summary
+class NumpyEncoder(json.JSONEncoder):
+    """自定义JSON编码器，处理numpy数据类型"""
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int32, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        return super(NumpyEncoder, self).default(obj)
 
 
 if __name__ == "__main__":
-    # 检查是否有数据文件
-    import os
-    
-    data_files = [
-        'pelt_ready_data.json',
-        'simulation_results_optimized.json',
-        'simulation_results_optimized.csv'
-    ]
-    
-    existing_files = [f for f in data_files if os.path.exists(f)]
-    
-    if not existing_files:
-        print("警告: 未找到数据文件")
-        print("选项:")
-        print("1. 运行quick_demo()使用示例数据")
-        print("2. 先运行extract_simulation_data.py生成数据")
-        
-        demo_choice = input("请选择 (1或2): ").strip()
-        
-        if demo_choice == '1':
-            detector, summary = quick_demo()
-        else:
-            print("请先运行: python extract_simulation_data.py")
-    else:
-        print(f"找到以下数据文件: {', '.join(existing_files)}")
-        main()
+    main()

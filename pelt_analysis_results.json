@@ -1,0 +1,128 @@
+{
+    "data_source": "pelt_ready_data.json",
+    "summary": {
+        "speed": [
+            {
+                "index": 3,
+                "p_value": 0.15000000000000002,
+                "value_before": 26.250852584838867,
+                "value_after": 26.610097885131836
+            },
+            {
+                "index": 6,
+                "p_value": 0.30000000000000004,
+                "value_before": 31.457128524780273,
+                "value_after": 35.976009368896484
+            },
+            {
+                "index": 9,
+                "p_value": 0.45,
+                "value_before": 38.32106399536133,
+                "value_after": 36.09756851196289
+            },
+            {
+                "index": 12,
+                "p_value": 0.6000000000000001,
+                "value_before": 43.174278259277344,
+                "value_after": 52.108707427978516
+            },
+            {
+                "index": 15,
+                "p_value": 0.75,
+                "value_before": 54.5770149230957,
+                "value_after": 53.61263656616211
+            }
+        ],
+        "flow": [
+            {
+                "index": 3,
+                "p_value": 0.15000000000000002,
+                "value_before": 6768.576171875,
+                "value_after": 6826.4638671875
+            },
+            {
+                "index": 6,
+                "p_value": 0.30000000000000004,
+                "value_before": 7293.1318359375,
+                "value_after": 7693.10986328125
+            },
+            {
+                "index": 9,
+                "p_value": 0.45,
+                "value_before": 7327.90771484375,
+                "value_after": 7329.85205078125
+            },
+            {
+                "index": 12,
+                "p_value": 0.6000000000000001,
+                "value_before": 7936.10986328125,
+                "value_after": 8433.072265625
+            },
+            {
+                "index": 15,
+                "p_value": 0.75,
+                "value_before": 8362.0078125,
+                "value_after": 8742.81640625
+            }
+        ],
+        "congestion": [
+            {
+                "index": 3,
+                "p_value": 0.15000000000000002,
+                "value_before": 0.12540684014558792,
+                "value_after": 0.11439246386289596
+            },
+            {
+                "index": 6,
+                "p_value": 0.30000000000000004,
+                "value_before": 0.014203101098537445,
+                "value_after": 0.0
+            },
+            {
+                "index": 9,
+                "p_value": 0.45,
+                "value_before": 0.0,
+                "value_after": 0.0
+            },
+            {
+                "index": 12,
+                "p_value": 0.6000000000000001,
+                "value_before": 0.0,
+                "value_after": 0.0
+            }
+        ],
+        "travel_time": [
+            {
+                "index": 3,
+                "p_value": 0.15000000000000002,
+                "value_before": 22.8564004944559,
+                "value_after": 22.547831375518722
+            },
+            {
+                "index": 6,
+                "p_value": 0.30000000000000004,
+                "value_before": 19.073578172507116,
+                "value_after": 16.677780846886748
+            },
+            {
+                "index": 9,
+                "p_value": 0.45,
+                "value_before": 15.657185303430733,
+                "value_after": 16.621618151404224
+            },
+            {
+                "index": 12,
+                "p_value": 0.6000000000000001,
+                "value_before": 13.897163408193656,
+                "value_after": 11.514390389154892
+            },
+            {
+                "index": 15,
+                "p_value": 0.75,
+                "value_before": 10.993639004358485,
+                "value_after": 11.191391403770153
+            }
+        ]
+    },
+    "analysis_time": "2026-01-27T10:34:43.511960"
+}
