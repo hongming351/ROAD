@@ -1,0 +1,31 @@
+# 交通流分析项目依赖包
+
+# 数据处理和分析
+pandas>=1.5.0
+numpy>=1.21.0
+scipy>=1.7.0
+
+# 可视化
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# 机器学习和优化
+scikit-learn>=1.0.0
+joblib>=1.1.0
+
+# 贝叶斯优化
+bayesian-optimization>=1.4.0
+
+# 网络分析
+networkx>=2.6.0
+
+# 进度条
+tqdm>=4.60.0
+
+# 动画支持
+matplotlib-animations>=0.1.0
+
+# 可选依赖（用于增强功能）
+# plotly>=5.0.0  # 交互式可视化
+# folium>=0.12.0  # 地理空间可视化
+# geopandas>=0.10.0  # 地理数据分析
